@@ -1,0 +1,13 @@
+[tool.poetry]
+name = "yolov8"
+version = "0.1.0"
+description = "YOLOv8 Re-Implementation"
+authors = ["Sarvesh Mayilvahanan"]
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = "^3.8"
+numpy = "^1.23.0"
+torch = "^2.0.0"
+pyyaml = "^6.0.1"
+tqdm = "^4.64.0"
