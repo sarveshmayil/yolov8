@@ -1,4 +1,4 @@
-from abc import ABC
+from abc import ABC, abstractmethod
 
 import torch
 import torch.nn as nn
@@ -17,7 +17,7 @@ class BaseModel(nn.Module, ABC):
     def forward(self, x:torch.Tensor, *args, **kwargs):
         return self.predict(x, *args, **kwargs)
 
-    @ABC.abstractmethod
+    @abstractmethod
     def predict(self, x:torch.Tensor, *args, **kwargs):
         raise NotImplementedError
 
