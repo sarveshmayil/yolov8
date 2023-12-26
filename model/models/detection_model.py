@@ -4,6 +4,7 @@ import torch.nn as nn
 from model.models.base_model import BaseModel
 from model.modules.conv import Conv
 from model.modules.block import SPPF, C2f
+from model.modules.head import DetectionHead
 
 class DetectionModel(BaseModel):
     def __init__(self, config:str, in_channels:int, n_classes=None):
@@ -62,7 +63,9 @@ class DetectionModel(BaseModel):
 
         self.c2f21 = C2f(512, 1024, n=max(round(3*depth), 1))
 
-    def forward(self, x: torch.Tensor, *args, **kwargs):
+        self.detect = DetectionHead(n_classes=n_classes, in_channels=[256, 512, 1024])
+
+    def forward(self, x: torch.Tensor):
         # Backbone
         out4 = self.c2f4(self.conv3(self.c2f2(self.conv1(self.conv0(x)))))
         out6 = self.c2f6(self.conv5(out4))
@@ -76,6 +79,8 @@ class DetectionModel(BaseModel):
         out18 = self.c2f18(torch.cat((out12, self.conv16(out15)), dim=1))
 
         out21 = self.c2f21(torch.cat((out9, self.conv19(out18)), dim=1))
+
+        return self.detect([out15, out18, out21])
 
 
 class Backbone(nn.Module):
