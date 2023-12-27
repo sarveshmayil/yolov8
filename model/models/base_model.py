@@ -17,9 +17,22 @@ class BaseModel(nn.Module, ABC):
     def forward(self, x:torch.Tensor, *args, **kwargs):
         return self.predict(x, *args, **kwargs)
 
-    @abstractmethod
     def predict(self, x:torch.Tensor, *args, **kwargs):
-        raise NotImplementedError
+        return self._predict(x, *args, **kwargs)
+    
+    def _predict(self, x:torch.Tensor, *args, **kwargs):
+        outputs = []
+        for module in self.model:
+            if module.f != -1:
+                x = outputs[module.f] if isinstance(module.f, int) else [x if i == -1 else outputs[i] for i in module.f]
+            x = module(x)
+
+            if module.i in self.save_idxs:
+                outputs.append(x)
+            else:
+                outputs.append(None)
+
+        return x
 
     def save(self, path:str):
         torch.save(self.state_dict(), path)
