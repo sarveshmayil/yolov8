@@ -6,6 +6,9 @@ import torch.nn as nn
 from typing import Union
 
 class BaseModel(nn.Module, ABC):
+    save_idxs = set()
+    model:nn.ModuleList = None
+
     def __init__(self):
         super(BaseModel, self).__init__()
 

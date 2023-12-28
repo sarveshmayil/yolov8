@@ -7,6 +7,8 @@ from .utils import dist2bbox
 
 from typing import List
 
+__all__ = ('DetectionHead')
+
 class DetectionHead(nn.Module):
     anchors = torch.empty(0)
     strides = torch.empty(0)
