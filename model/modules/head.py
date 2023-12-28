@@ -1,5 +1,6 @@
 import torch
 import torch.nn as nn
+from math import log
 
 from .conv import Conv
 from .block import DFL
@@ -10,6 +11,7 @@ from typing import List
 __all__ = ('DetectionHead')
 
 class DetectionHead(nn.Module):
+    stride:torch.Tensor
     anchors = torch.empty(0)
     strides = torch.empty(0)
 
@@ -56,3 +58,16 @@ class DetectionHead(nn.Module):
 
         out = torch.cat((bbox, torch.sigmoid(cls)), dim=1)
         return out, x
+    
+    def _bias_init(self) -> None:
+        """
+        Initialize biases for Conv2d layers
+
+        Must set stride before calling this method
+        """
+        if self.stride is None:
+            raise ValueError('stride is not set')
+        
+        for b_list, c_list, s in zip(self.box_convs, self.cls_convs, self.stride):
+            b_list[-1].bias.data[:] = 1.0
+            c_list[-1].bias.data[:self.nc] = log(5/(self.nc*(640/s)**2))

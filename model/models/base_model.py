@@ -1,15 +1,23 @@
-from abc import ABC, abstractmethod
-
 import torch
 import torch.nn as nn
 
 from model.modules import Conv, C2f, SPPF, DetectionHead
+from model.utils.loss import BaseLoss
 
 from typing import Union
 
-class BaseModel(nn.Module, ABC):
-    def __init__(self):
-        super(BaseModel, self).__init__()
+class BaseModel(nn.Module):
+    model:nn.ModuleList
+    save_idxs:set
+    loss_fn:BaseLoss
+
+    def __init__(self, device='cpu'):
+        super().__init__()
+
+        self.device = device
+
+        self.model = None
+        self.save_idxs = set()
 
     def load(self, weights:Union[dict, nn.Module]):
         model = weights if isinstance(weights, nn.Module) else weights['model']
@@ -37,6 +45,10 @@ class BaseModel(nn.Module, ABC):
                 outputs.append(None)
 
         return x
+    
+    def loss(self, batch:torch.Tensor):
+        preds = self.forward(batch)
+        return self.loss_fn.compute_loss(batch, preds)
 
     def save(self, path:str):
         torch.save(self.state_dict(), path)
