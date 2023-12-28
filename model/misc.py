@@ -1,3 +1,5 @@
+import logging
+
 import torch
 import torch.nn as nn
 
@@ -6,6 +8,10 @@ from .modules import Conv, C2f, SPPF, DetectionHead
 from typing import Tuple
 
 def parse_config(config_dict:dict, verbose=False) -> Tuple[nn.Module, set]:
+    if verbose:
+        log = logging.getLogger("yolo")
+        logging.basicConfig(level=logging.INFO)
+    
     depth, width, max_channels = config_dict['scale']
 
     channels = [config_dict.get('in_channels', 3)]
@@ -27,6 +33,9 @@ def parse_config(config_dict:dict, verbose=False) -> Tuple[nn.Module, set]:
         elif module in (DetectionHead,):
             args.append([channels[idx] for idx in f])
 
+        if verbose:
+            log.info(f'{i:>3} | {module.__name__:>14} | {str(f):>12} | {args}')
+
         m_ = module(*args)
         modules.append(m_)
         m_.i, m_.f = i, f
@@ -40,5 +49,8 @@ def parse_config(config_dict:dict, verbose=False) -> Tuple[nn.Module, set]:
         channels.append(c_out)
 
     save_idxs.remove(-1)
+
+    if verbose:
+        log.info(f' Will save at indices: {save_idxs}')
 
     return nn.Sequential(*modules), save_idxs
