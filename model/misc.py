@@ -39,4 +39,6 @@ def parse_config(config_dict:dict, verbose=False) -> Tuple[nn.Module, set]:
             channels = []
         channels.append(c_out)
 
+    save_idxs.remove(-1)
+
     return nn.Sequential(*modules), save_idxs
