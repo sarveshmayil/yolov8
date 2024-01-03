@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 
 
-__all__ = ('autopad', 'dist2bbox', 'init_weights')
+__all__ = ('autopad', 'dist2bbox', 'init_weights', 'make_anchors')
 
 
 def autopad(kernel_size:int, padding:int=None):
@@ -29,6 +29,15 @@ def dist2bbox(distance:torch.Tensor, anchor_points:torch.Tensor, xywh:bool=True,
     
     return torch.cat((xy_lt, xy_rb), dim=dim)
 
+def bbox2dist(bbox:torch.Tensor, anchor_points:torch.Tensor, reg_max:int):
+    """
+    Transform bounding box (xyxy) to distance (ltrb)
+    """
+    xy_lt, xy_rb = torch.chunk(bbox, 2, dim=-1)
+    lt = anchor_points - xy_lt
+    rb = xy_rb - anchor_points
+    return torch.cat((lt, rb), dim=-1).clamp(max=reg_max-0.01)
+
 def init_weights(model:nn.Module):
     for m in model.modules():
         t = type(m)
@@ -41,3 +50,22 @@ def init_weights(model:nn.Module):
             m.momentum = 0.03
         elif t in (nn.ReLU, nn.SiLU):
             m.inplace = True
+
+def make_anchors(feats:torch.Tensor, strides:torch.Tensor):
+    anchor_points = []
+    stride_tensor = []
+
+    for i, stride in enumerate(strides):
+        h, w = feats[i].shape[-2:]
+        yv, xv = torch.meshgrid(torch.arange(h).to(device=feats.device, dtype=feats.dtype) + 0.5,
+                                torch.arange(w).to(device=feats.device, dtype=feats.dtype) + 0.5)
+
+        # (x,y) coordinates of center of each cell in grid
+        anchor_points.append(torch.stack((xv, yv), dim=-1).view(-1, 2))
+        stride_tensor.append(torch.full((h*w,1), stride).to(device=feats.device, dtype=feats.dtype))
+
+    anchor_points = torch.cat(anchor_points, dim=0)
+    stride_tensor = torch.cat(stride_tensor, dim=0)
+
+    return anchor_points, stride_tensor
+        

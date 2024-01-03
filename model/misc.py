@@ -19,9 +19,15 @@ def parse_config(config_dict:dict, verbose=False) -> Tuple[nn.Module, set]:
     modules = []
     save_idxs = set()
 
+    if verbose:
+        log.info(f'{"idx":>4} | {"Module Type":>14} | {"Input idx(s)":>12} | Args')
+        log.info('-'*60)
+
+    # Loop through backbone and head layers
     for i, (module, f, r, args) in enumerate(config_dict['backbone']+config_dict['head']):
         module = getattr(torch.nn, module[3:]) if module.startswith('nn.') else globals()[module]
         if module in (Conv, C2f, SPPF):
+            # Get input/output channel sizes
             c_in = channels[f] if isinstance(f, int) else sum([channels[idx] for idx in f])
             c_out = args[0]
 
@@ -34,7 +40,7 @@ def parse_config(config_dict:dict, verbose=False) -> Tuple[nn.Module, set]:
             args.append([channels[idx] for idx in f])
 
         if verbose:
-            log.info(f'{i:>3} | {module.__name__:>14} | {str(f):>12} | {args}')
+            log.info(f'{i:>4} | {module.__name__:>14} | {str(f):>12} | {args}')
 
         m_ = module(*args)
         modules.append(m_)
