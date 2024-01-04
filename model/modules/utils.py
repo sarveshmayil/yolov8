@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 
 
-__all__ = ('autopad', 'dist2bbox', 'init_weights', 'make_anchors')
+__all__ = ('autopad', 'dist2bbox', 'init_weights', 'make_anchors', 'xywh2xyxy', 'xyxy2xywh')
 
 
 def autopad(kernel_size:int, padding:int=None):
@@ -68,4 +68,17 @@ def make_anchors(feats:torch.Tensor, strides:torch.Tensor):
     stride_tensor = torch.cat(stride_tensor, dim=0)
 
     return anchor_points, stride_tensor
-        
+
+def xywh2xyxy(xywh:torch.Tensor):
+    """
+    Convert bounding box coordinates from (xywh) to (xyxy)
+    """
+    xy, wh = torch.chunk(xywh, 2, dim=-1)
+    return torch.cat((xy - wh / 2, xy + wh / 2), dim=-1)
+
+def xyxy2xywh(xyxy:torch.Tensor):
+    """
+    Convert bounding box coordinates from (xyxy) to (xywh)
+    """
+    xy_lt, xy_rb = torch.chunk(xyxy, 2, dim=-1)
+    return torch.cat(((xy_lt + xy_rb) / 2, xy_rb - xy_lt), dim=-1)
