@@ -3,6 +3,7 @@ import torch
 
 from .base_model import BaseModel
 from model.modules import DetectionHead
+from model.utils.loss import DetectionLoss
 
 from model.misc import parse_config
 from model.modules import init_weights
@@ -20,6 +21,7 @@ class DetectionModel(BaseModel):
         self.inplace = config.get('inplace', True)
 
         detect_head = self.model[-1]
+        # Calculate stride for detection head
         if isinstance(detect_head, DetectionHead):
             detect_head.inplace = True
             s = 256
@@ -27,4 +29,8 @@ class DetectionModel(BaseModel):
             self.stride = detect_head.stride
             detect_head._bias_init()
 
+        # Initialize weights
         init_weights(self)
+
+        # Initialize loss function
+        self.loss_fn = DetectionLoss(self, self.device)
