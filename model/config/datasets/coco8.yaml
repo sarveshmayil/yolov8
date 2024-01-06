@@ -9,6 +9,8 @@
 path: ../datasets/coco8  # dataset root dir
 train: images/train  # train images (relative to 'path') 4 images
 val: images/val  # val images (relative to 'path') 4 images
+train_labels: labels/train
+val_labels: labels/val
 test:  # test images (optional)
 
 # Classes
