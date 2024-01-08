@@ -14,6 +14,8 @@ def parse_config(config_dict:dict, verbose=False) -> Tuple[nn.Module, set]:
     
     depth, width, max_channels = config_dict['scale']
 
+    num_classes = config_dict['num_classes']
+
     channels = [config_dict.get('in_channels', 3)]
 
     modules = []
@@ -30,6 +32,9 @@ def parse_config(config_dict:dict, verbose=False) -> Tuple[nn.Module, set]:
             # Get input/output channel sizes
             c_in = channels[f] if isinstance(f, int) else sum([channels[idx] for idx in f])
             c_out = args[0]
+
+            if c_out != num_classes:
+                c_out = int(min(c_out, max_channels) * width)
 
             if module == C2f:
                 args = [c_in, c_out, max(round(r*depth), 1), *args[1:]]

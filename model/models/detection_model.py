@@ -33,4 +33,5 @@ class DetectionModel(BaseModel):
         init_weights(self)
 
         # Initialize loss function
+        self.loss_gains = config.get('loss_gains', None)
         self.loss_fn = DetectionLoss(self, self.device)

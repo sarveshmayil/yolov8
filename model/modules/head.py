@@ -21,6 +21,7 @@ class DetectionHead(nn.Module):
         self.n_layers = len(in_channels)
         self.reg_max = 16
         self.n_outputs = 4*self.reg_max + self.nc
+        self.stride = torch.zeros(self.n_layers)
 
         c2 = max((16, in_channels[0]//4, self.reg_max*4))
         c3 = max(in_channels[0], min(self.nc, 100))

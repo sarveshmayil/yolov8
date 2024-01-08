@@ -41,3 +41,8 @@ head:
   - [C2f, [-1, 9], 3, [1024, False]]               # 17 (20,20,1024+512) -> (20,20,1024)
 
   - [DetectionHead, [13, 15, 17], null, [80]]      # 18 (h,w,c) -> (h,w,nc+4*reg_max)
+
+loss_gains:
+  cls: 1.0
+  iou: 1.0
+  dfl: 1.0
