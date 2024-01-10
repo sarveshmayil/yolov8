@@ -7,6 +7,7 @@ from model.utils.loss import DetectionLoss
 
 from model.misc import parse_config
 from model.modules import init_weights
+from model.utils.ops import nms
 
 class DetectionModel(BaseModel):
     def __init__(self, config:str, verbose:bool=True, *args, **kwargs):
@@ -35,3 +36,6 @@ class DetectionModel(BaseModel):
         # Initialize loss function
         self.loss_gains = config.get('loss_gains', None)
         self.loss_fn = DetectionLoss(self, self.device)
+
+    def postprocess(self, preds: torch.Tensor):
+        return nms(preds)

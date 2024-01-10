@@ -4,16 +4,16 @@ from math import log
 
 from .conv import Conv
 from .block import DFL
-from .utils import dist2bbox
+from .utils import dist2bbox, make_anchors
 
 from typing import List
 
 __all__ = ('DetectionHead')
 
 class DetectionHead(nn.Module):
-    stride:torch.Tensor
     anchors = torch.empty(0)
     strides = torch.empty(0)
+    shape = None
 
     def __init__(self, n_classes:int=80, in_channels:List[int]=[]):
         super().__init__()
@@ -45,18 +45,31 @@ class DetectionHead(nn.Module):
         self.dfl = DFL(in_channels=self.reg_max)
 
     def forward(self, x:List[torch.Tensor]):
-        shape = x[0].shape  # (batch, channels, height, width)
         for i in range(self.n_layers):
+            # (batch, 4*reg_max + nc, height, width)
             x[i] = torch.cat((self.box_convs[i](x[i]), self.cls_convs[i](x[i])), dim=1)
 
         # If training, return predicted box, class prediction
         if self.training:
             return x
         
-        x = torch.cat([xi.view(shape[0], self.n_outputs, -1) for xi in x], dim=2)
-        box, cls = x.split((4*self.reg_max, self.nc), dim=1)
+        shape = x[0].shape  # (batch, channels, height, width)
+
+        # (batch, 4*reg_max + nc, n_layers*height*width)
+        x_cat = torch.cat([xi.view(shape[0], self.n_outputs, -1) for xi in x], dim=2)
+
+        if self.shape != shape:
+            self.anchors, self.strides = make_anchors(x, self.stride)
+            self.anchors.transpose_(0, 1)
+            self.strides.transpose_(0, 1)
+            self.shape = shape
+
+        # (batch, 4*reg_max, n_layers*height*width), (batch, nc, n_layers*height*width)
+        box, cls = x_cat.split((4*self.reg_max, self.nc), dim=1)
+        # (batch, 4, n_layers*height*width) (ltrb) -> (xywh)
         bbox = dist2bbox(self.dfl(box), self.anchors.unsqueeze(0), dim=1) * self.strides
 
+        # (batch, 4+nc, n_layers*height*width)
         out = torch.cat((bbox, torch.sigmoid(cls)), dim=1)
         return out, x
     

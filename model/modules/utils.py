@@ -55,14 +55,17 @@ def make_anchors(feats:torch.Tensor, strides:torch.Tensor):
     anchor_points = []
     stride_tensor = []
 
+    device = feats[0].device
+    dtype = feats[0].dtype
+
     for i, stride in enumerate(strides):
         h, w = feats[i].shape[-2:]
-        yv, xv = torch.meshgrid(torch.arange(h).to(device=feats.device, dtype=feats.dtype) + 0.5,
-                                torch.arange(w).to(device=feats.device, dtype=feats.dtype) + 0.5)
+        yv, xv = torch.meshgrid(torch.arange(h).to(device=device, dtype=dtype) + 0.5,
+                                torch.arange(w).to(device=device, dtype=dtype) + 0.5)
 
         # (x,y) coordinates of center of each cell in grid
         anchor_points.append(torch.stack((xv, yv), dim=-1).view(-1, 2))
-        stride_tensor.append(torch.full((h*w,1), stride).to(device=feats.device, dtype=feats.dtype))
+        stride_tensor.append(torch.full((h*w,1), stride).to(device=device, dtype=dtype))
 
     anchor_points = torch.cat(anchor_points, dim=0)
     stride_tensor = torch.cat(stride_tensor, dim=0)

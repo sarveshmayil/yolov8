@@ -64,8 +64,10 @@ class DFL(nn.Module):
         x = torch.arange(in_channels, dtype=torch.float)
         self.conv.weight.data = nn.Parameter(x.view(1, in_channels, 1, 1))
 
-    def forward(self, x:torch.Tensor):
+    def forward(self, x:torch.Tensor) -> torch.Tensor:
         b, _, a = x.shape  # (batch, channels, anchors)
+        # (b, 4*reg_max, anchors) -> (b, 4, reg_max, anchors) -> (b, reg_max, 4, anchors)
+        # -> (b, 1, 4, anchors) -> (b, 4, anchors)
         return self.conv(x.view(b, 4, self.in_channels, a).transpose(2,1).softmax(dim=1)).view(b, 4, a)
     
 

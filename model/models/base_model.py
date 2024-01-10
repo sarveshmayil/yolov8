@@ -11,8 +11,11 @@ class BaseModel(nn.Module):
     save_idxs:set
     loss_fn:BaseLoss
 
-    def __init__(self, device='cpu'):
+    def __init__(self, mode='train', device='cpu'):
         super().__init__()
+
+        assert mode in ('train', 'eval'), f'Invalid mode: {mode}'
+        self.mode = mode
 
         self.device = device
 
@@ -28,7 +31,11 @@ class BaseModel(nn.Module):
         return self.predict(x, *args, **kwargs)
 
     def predict(self, x:torch.Tensor, *args, **kwargs):
-        return self._predict(x, *args, **kwargs)
+        preds = self._predict(x, *args, **kwargs)
+
+        if self.mode == 'eval':
+            return self.postprocess(preds)
+        return preds
     
     def _predict(self, x:torch.Tensor, *args, **kwargs):
         outputs = []
@@ -49,6 +56,9 @@ class BaseModel(nn.Module):
     def loss(self, batch:torch.Tensor):
         preds = self.forward(batch)
         return self.loss_fn.compute_loss(batch, preds)
+    
+    def postprocess(self, preds:torch.Tensor):
+        return preds
 
     def save(self, path:str):
         torch.save(self.state_dict(), path)
