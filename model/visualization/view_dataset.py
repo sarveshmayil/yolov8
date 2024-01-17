@@ -1,3 +1,4 @@
+import argparse
 import yaml
 import os
 import cv2
@@ -5,11 +6,36 @@ import numpy as np
 from matplotlib import colormaps as cm
 
 
-def visualize_dataset(config_file:str):
-    config_dict = yaml.safe_load(open(config_file, 'r'))
+def get_args():
+    parser = argparse.ArgumentParser(description='Display annotations')
 
-    im_dir = os.path.join(config_dict['path'], config_dict['train'])
-    label_dir = os.path.join(config_dict['path'], config_dict['train_labels'])
+    parser.add_argument(
+        '--config',
+        type=str,
+        required=True,
+        help='path to dataset config file'
+    )
+    parser.add_argument(
+        '--dataset_mode',
+        type=str,
+        default='val',
+        help='dataset mode - (train/val/test)'
+    )
+    parser.add_argument(
+        '--labels',
+        '-l',
+        type=str,
+        default='labels/val',
+        help='relative path to label directory'
+    )
+
+    return parser.parse_args()
+
+def visualize_dataset(args):
+    config_dict = yaml.safe_load(open(args.config, 'r'))
+
+    im_dir = os.path.join(os.path.dirname(args.config), config_dict['path'], config_dict[args.dataset_mode])
+    label_dir = os.path.join(os.path.dirname(args.config), config_dict['path'], args.labels)
 
     num_classes = len(config_dict['names'])
 
@@ -34,6 +60,10 @@ def visualize_dataset(config_file:str):
 
             x1, y1, x2, y2 = xywh[0]-xywh[2]//2, xywh[1]-xywh[3]//2, xywh[0]+xywh[2]//2, xywh[1]+xywh[3]//2
 
+            if len(ann) > 5:
+                confidence = float(ann[5])
+                label += f' {confidence:.2f}'
+
             cls_color = cmap(cls/num_classes, bytes=True)[:3]
             cls_color = (int(cls_color[0]), int(cls_color[1]), int(cls_color[2]))
 
@@ -49,3 +79,8 @@ def visualize_dataset(config_file:str):
         cv2.waitKey(0)
 
     cv2.destroyAllWindows()
+
+
+if __name__ == '__main__':
+    args = get_args()
+    visualize_dataset(args)
