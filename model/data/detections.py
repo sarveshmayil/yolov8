@@ -7,7 +7,8 @@ from typing import Iterator, List, Optional, Tuple, Union
 
 import numpy as np
 
-from .utils import non_max_suppression, validate_detections_fields
+from .utils import non_max_suppression, validate_detections_fields, xyxy2xywh
+from model.data.utils import unpad_xyxy
 
 
 @dataclass
@@ -204,6 +205,62 @@ class Detections:
             tracker_id=self.tracker_id[index] if self.tracker_id is not None else None
         )
 
+    def unpad_xyxy(self, pads:Tuple[int,int,int,int]) -> None:
+        """
+        Remove padding from the bounding boxes based on image padding
+
+        Args:
+            pads: The padding added to the image in the format
+                of `(left, right, top, bottom)`.
+        """
+        self.xyxy = unpad_xyxy(self.xyxy, pads)
+
+    def normalize(self, im_size:Tuple[int,int]) -> None:
+        """
+        Normalize the bounding boxes to be between 0 and 1.
+
+        Args:
+            im_size: The size of the image in the format of `(h, w)`.
+        """
+        self.xyxy[:, [0, 2]] /= im_size[1]
+        self.xyxy[:, [1, 3]] /= im_size[0]
+
+    def save(
+        self,
+        save_path:str,
+        format:str='coco',
+        pads:Tuple[int,int,int,int]=None,
+        im_size:Tuple[int,int]=None
+    ) -> None:
+        """
+        Save the Detections object to a file.
+
+        Args:
+            save_path (str): The path to save the Detections object to.
+            format (str, optional): The format to save the Detections object in.
+                Defaults to 'coco'.
+            pads (Tuple[int,int,int,int], optional): The padding added to the image
+                in the format of `(left, right, top, bottom)`. Defaults to None.
+            im_size (Tuple[int,int], optional): The size of the image in the format
+                '(h, w)'. Defaults to None. Used to normalize the bounding boxes.
+        """
+        file = open(save_path, 'w')
+
+        if format == 'coco':
+            if pads is not None:
+                self.unpad_xyxy(pads)
+            if im_size is not None:
+                self.normalize(im_size)
+            xywh = xyxy2xywh(self.xyxy)
+            for i in range(len(self)):
+                x1, y1, x2, y2 = xywh[i]
+                cls = self.class_id[i]
+                confidence = self.confidence[i]
+
+                file.write(f'{cls} {x1:.6f} {y1:.6f} {x2:.6f} {y2:.6f} {confidence:.6f}\n')
+
+        file.close()
+
     @property
     def area(self) -> np.ndarray:
         """
@@ -234,7 +291,7 @@ class Detections:
         return (self.xyxy[:, 3] - self.xyxy[:, 1]) * (self.xyxy[:, 2] - self.xyxy[:, 0])
 
     def with_nms(
-        self, threshold: float = 0.5, class_agnostic: bool = False
+        self, threshold:float=0.5, class_agnostic:bool=False
     ) -> Detections:
         """
         Perform non-maximum suppression on the current set of object detections.

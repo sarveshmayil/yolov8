@@ -2,7 +2,22 @@ import torch
 import torch.nn.functional as F
 import numpy as np
 
-from typing import Tuple, Any
+from typing import Tuple, Any, Union
+
+
+def xywh2xyxy(xywh:np.ndarray):
+    """
+    Convert bounding box coordinates from (xywh) to (xyxy)
+    """
+    xy, wh = np.split(xywh, 2, axis=-1)
+    return np.concatenate((xy - wh / 2, xy + wh / 2), axis=-1)
+
+def xyxy2xywh(xyxy:np.ndarray):
+    """
+    Convert bounding box coordinates from (xyxy) to (xywh)
+    """
+    xy_lt, xy_rb = np.split(xyxy, 2, axis=-1)
+    return np.concatenate(((xy_lt + xy_rb) / 2, xy_rb - xy_lt), axis=-1)
 
 def pad_to(x:torch.Tensor, stride:int=None, shape:Tuple[int,int]=None):
     """
@@ -34,6 +49,32 @@ def pad_to(x:torch.Tensor, stride:int=None, shape:Tuple[int,int]=None):
 def unpad(x:torch.Tensor, pads:tuple):
     l, r, t, b = pads
     return x[..., t:-b, l:-r]
+
+def pad_xyxy(xyxy:Union[np.ndarray, torch.Tensor], pads:Tuple[int, int, int, int]):
+    """
+    Add padding to the bounding boxes based on image padding
+
+    Args:
+        pad: The padding added to the image in the format
+            of `(left, right, top, bottom)`.
+    """
+    l, r, t, b = pads
+    if isinstance(xyxy, np.ndarray):
+        return xyxy + np.array([l, t, l, t], dtype=xyxy.dtype)
+    return xyxy + torch.tensor([l, t, l, t], dtype=xyxy.dtype, device=xyxy.device)
+
+def unpad_xyxy(xyxy:Union[np.ndarray, torch.Tensor], pads:Tuple[int, int, int, int]):
+    """
+    Remove padding from the bounding boxes based on image padding
+
+    Args:
+        pad: The padding added to the image in the format
+            of `(left, right, top, bottom)`.
+    """
+    l, r, t, b = pads
+    if isinstance(xyxy, np.ndarray):
+        return xyxy - np.array([l, t, l, t], dtype=xyxy.dtype)
+    return xyxy - torch.tensor([l, t, l, t], dtype=xyxy.dtype, device=xyxy.device)
 
 def box_iou_batch(gt_boxes: np.ndarray, pred_boxes: np.ndarray) -> np.ndarray:
     """

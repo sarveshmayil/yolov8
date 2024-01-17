@@ -8,7 +8,7 @@ import numpy as np
 import torch
 from math import ceil
 
-from model.data.utils import pad_to
+from model.data.utils import pad_to, pad_xyxy
 
 from typing import Tuple
 
@@ -112,6 +112,7 @@ class Dataset(torch.utils.data.Dataset):
         Changes image shape to be specified img_size, but preserves aspect ratio.
         """
         im_file = self.im_files[idx]
+        im_id = os.path.splitext(os.path.basename(im_file))[0]
         image = cv2.cvtColor(cv2.imread(im_file), cv2.COLOR_BGR2RGB)
 
         h0, w0 = image.shape[:2]
@@ -130,15 +131,15 @@ class Dataset(torch.utils.data.Dataset):
 
         h, w = image.shape[-2:]
 
-        return image, (h0, w0), (h, w)
+        return image, pads, (h0,w0), im_id
 
     def get_image_and_label(self, idx):
         """
         Gets image and annotations at specified index
         """
         label = self.labels[idx]
-        # label['images'], label['orig_shapes'], label['shapes'] = self.load_image(idx)
-        label['images'], _, _ = self.load_image(idx)
+        label['images'], label['padding'], label['orig_shapes'], label['ids'] = self.load_image(idx)
+        label['bboxes'] = pad_xyxy(label['bboxes'], label['padding'])
 
         return label
 
@@ -159,6 +160,8 @@ class Dataset(torch.utils.data.Dataset):
                 collated_batch[k] = torch.stack([b[k] for b in batch], dim=0)
             elif k in ('cls', 'bboxes'):
                 collated_batch[k] = torch.cat([b[k] for b in batch], dim=0)
+            elif k in ('padding', 'orig_shapes', 'ids'):
+                collated_batch[k] = [b[k] for b in batch]
         
         collated_batch['batch_idx'] = [torch.full((batch[i]['cls'].shape[0],), i) for i in range(len(batch))]
         collated_batch['batch_idx'] = torch.cat(collated_batch['batch_idx'], dim=0)
