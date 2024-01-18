@@ -22,7 +22,7 @@ def get_args():
     parser.add_argument(
         '--weights',
         type=str,
-        default='yolov8n_mine.pt',
+        default='model/weights/yolov8n.pt',
         help='path to weights file'
     )
 
@@ -42,6 +42,7 @@ def get_args():
 
     parser.add_argument(
         '--device',
+        '-d',
         type=str,
         default='cuda',
         help='device to run inference on'
@@ -65,8 +66,9 @@ def get_args():
 
 
 def main(args):
-    model = DetectionModel(args.config)
-    model.load_state_dict(torch.load(args.weights))
+    device = torch.device(args.device)
+    model = DetectionModel(args.config, device=device)
+    model.load(torch.load(args.weights))
     model.eval()
     model.mode = 'eval'
 
@@ -83,7 +85,7 @@ def main(args):
 
     for batch in dataloader:
         with torch.no_grad():
-            preds = model(batch['images'])
+            preds = model(batch['images'].to(device))
 
         for i in range(len(preds)):
             detections = Detections.from_yolo(preds[i])

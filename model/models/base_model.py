@@ -23,8 +23,7 @@ class BaseModel(nn.Module):
         self.save_idxs = set()
 
     def load(self, weights:Union[dict, nn.Module]):
-        model = weights if isinstance(weights, nn.Module) else weights['model']
-        state_dict = model.float().state_dict()
+        state_dict = weights.float().state_dict() if isinstance(weights, nn.Module) else weights
         self.load_state_dict(state_dict)
 
     def forward(self, x:torch.Tensor, *args, **kwargs):

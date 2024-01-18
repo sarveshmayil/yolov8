@@ -26,7 +26,7 @@ class DetectionModel(BaseModel):
         if isinstance(detect_head, DetectionHead):
             detect_head.inplace = True
             s = 256
-            detect_head.stride = torch.tensor([s / x.shape[-2] for x in self.forward(torch.zeros(1, in_channels, s, s))])
+            detect_head.stride = torch.tensor([s / x.shape[-2] for x in self.forward(torch.zeros(1, in_channels, s, s, device=self.device))])
             self.stride = detect_head.stride
             detect_head._bias_init()
 
