@@ -10,7 +10,7 @@ class BaseLoss:
     def __init__(self, device:str):
         self.device = device
 
-    def compute_loss(self, batch:torch.Tensor, preds:torch.Tensor):
+    def compute_loss(self, batch:torch.Tensor, preds:torch.Tensor) -> torch.Tensor:
         raise NotImplementedError
 
 

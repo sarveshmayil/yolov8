@@ -53,7 +53,7 @@ class BaseModel(nn.Module):
         return x
     
     def loss(self, batch:torch.Tensor):
-        preds = self.forward(batch)
+        preds = self.forward(batch['images'].to(self.device))
         return self.loss_fn.compute_loss(batch, preds)
     
     def postprocess(self, preds:torch.Tensor):

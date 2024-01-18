@@ -59,13 +59,14 @@ class TaskAlignedAssigner(nn.Module):
     """
     Task-aligned assigner for object detection  
     """
-    def __init__(self, topk:int=10, num_classes:int=80, alpha:float=1.0, beta:float=6.0, eps:float=1e-8):
+    def __init__(self, topk:int=10, num_classes:int=80, alpha:float=1.0, beta:float=6.0, eps:float=1e-8, device:str='cuda'):
         super().__init__()
         self.topk = topk
         self.num_classes = num_classes
         self.alpha = alpha
         self.beta = beta
         self.eps = eps
+        self.device = device
 
         self.bg_idx = num_classes  # no object (background)
 
@@ -90,21 +91,20 @@ class TaskAlignedAssigner(nn.Module):
             target_boxes (Tensor): Target boxes of shape (batch_size, num_anchors, 4)
             target_scores (Tensor): Target scores of shape (batch_size, num_anchors, num_classes)
         """
-        batch_size = pred_scores.shape[0]
         num_max_boxes = gt_boxes.shape[1]
 
         # If there are no GT boxes, all boxes are background
         if num_max_boxes == 0:
-            return (torch.full_like(pred_scores[..., 0], self.bg_idx),
-                    torch.zeros_like(pred_boxes),
-                    torch.zeros_like(pred_scores))
+            return (torch.full_like(pred_scores[..., 0], self.bg_idx).to(self.device),
+                    torch.zeros_like(pred_boxes).to(self.device),
+                    torch.zeros_like(pred_scores).to(self.device))
         
         mask, align_metrics, ious = self.get_positive_mask(pred_scores, pred_boxes, anchor_points, gt_labels, gt_boxes)
 
         # Select GT box with highest IoU for each anchor
         target_gt_box_idxs, fg_mask, mask = select_highest_iou(mask, ious, num_max_boxes)
 
-        target_labels, target_boxes, target_scores = self.get_targets(gt_labels, gt_boxes, target_gt_box_idxs, mask)
+        target_labels, target_boxes, target_scores = self.get_targets(gt_labels, gt_boxes, target_gt_box_idxs, fg_mask)
 
         # Normalize
         align_metrics *= mask
@@ -115,7 +115,6 @@ class TaskAlignedAssigner(nn.Module):
 
         return target_labels, target_boxes, target_scores, mask
         
-
     def get_positive_mask(self, pred_scores, pred_boxes, anchor_points, gt_labels, gt_boxes):
         mask_anchors_in_gt = anchors_in_gt_boxes(anchor_points, gt_boxes)
 
@@ -124,7 +123,7 @@ class TaskAlignedAssigner(nn.Module):
         topk_mask = self.get_topk_candidates(alignment_metrics)
 
         # merge masks (batch_size, num_max_boxes, n_anchors)
-        mask = topk_mask & mask_anchors_in_gt
+        mask = topk_mask * mask_anchors_in_gt
 
         return mask, alignment_metrics, ious
 
@@ -135,8 +134,8 @@ class TaskAlignedAssigner(nn.Module):
         batch_size, n_anchors, _ = pred_scores.shape
         num_max_boxes = gt_boxes.shape[1]
 
-        ious = torch.zeros((batch_size, num_max_boxes, n_anchors), dtype=pred_boxes.dtype)
-        box_cls_scores = torch.zeros((batch_size, num_max_boxes, n_anchors), dtype=pred_scores.dtype)
+        ious = torch.zeros((batch_size, num_max_boxes, n_anchors), dtype=pred_boxes.dtype, device=pred_boxes.device)
+        box_cls_scores = torch.zeros((batch_size, num_max_boxes, n_anchors), dtype=pred_scores.dtype, device=pred_scores.device)
 
         batch_idxs = torch.arange(batch_size).unsqueeze_(1).expand(-1, num_max_boxes).to(torch.long)  # (bs, num_max_boxes)
         class_idxs = gt_labels.squeeze(-1).to(torch.long)  # (bs, num_max_boxes)
@@ -166,8 +165,8 @@ class TaskAlignedAssigner(nn.Module):
         # Fill values that have negative alignment metric with 0 idx
         topk_idxs.masked_fill_(~mask, 0)
 
-        counts = torch.zeros(alignment_metrics.shape, dtype=torch.uint8)  # (batch_size, num_max_boxes, n_anchors)
-        increment = torch.ones_like(topk_idxs[:,:,:1])  # (batch_size, num_max_boxes, 1)
+        counts = torch.zeros(alignment_metrics.shape, dtype=torch.int8, device=topk_idxs.device)  # (batch_size, num_max_boxes, n_anchors)
+        increment = torch.ones_like(topk_idxs[:,:,:1], dtype=torch.int8, device=topk_idxs.device)  # (batch_size, num_max_boxes, 1)
 
         for i in range(self.topk):
             counts.scatter_add_(dim=-1, index=topk_idxs[:,:,i:i+1], src=increment)
@@ -193,9 +192,9 @@ class TaskAlignedAssigner(nn.Module):
             target_scores (Tensor): Target scores for each positive anchor of shape (batch_size, num_anchors, num_classes)
         """
         batch_size, num_max_boxes, _ = gt_boxes.shape
-        _, num_anchors, _ = target_gt_box_idx.shape
+        _, num_anchors = target_gt_box_idx.shape
 
-        batch_idxs = torch.arange(batch_size).unsqueeze(-1)
+        batch_idxs = torch.arange(batch_size, device=gt_labels.device).unsqueeze(-1)
 
         target_gt_box_idx = target_gt_box_idx + batch_idxs * num_max_boxes
 
@@ -206,11 +205,11 @@ class TaskAlignedAssigner(nn.Module):
         target_boxes = gt_boxes.view(-1, 4)[target_gt_box_idx]  # (batch_size, num_anchors, 4)
 
         # One hot encode (equivalent to doing F.one_hot())
-        target_scores = torch.zeros((batch_size, num_anchors, self.num_classes), dtype=torch.int64)
-        target_scores.scatter_(dim=2, index=target_labels.unsqueeze(-1), src=1)
+        target_scores = torch.zeros((batch_size, num_anchors, self.num_classes), dtype=torch.int64, device=target_labels.device)
+        target_scores.scatter_(dim=2, index=target_labels.unsqueeze(-1), value=1)
 
         scores_mask = mask.unsqueeze(-1).expand(-1, -1, self.num_classes)  # (batch_size, num_anchors, num_classes)
-        target_scores = torch.where(scores_mask, target_scores, 0)
+        target_scores = torch.where(scores_mask > 0, target_scores, 0)
 
         return target_labels, target_boxes, target_scores
 

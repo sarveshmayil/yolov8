@@ -1,0 +1,5 @@
+epochs: 20
+lr: 1.e-5
+
+save_freq: 5
+save_dir: "model/weights"
