@@ -3,6 +3,8 @@ import torch.nn as nn
 
 from .metrics import bbox_iou
 
+from typing import Tuple
+
 
 def anchors_in_gt_boxes(anchor_points:torch.Tensor, gt_boxes:torch.Tensor, eps:float=1e-8):
     """
@@ -71,7 +73,15 @@ class TaskAlignedAssigner(nn.Module):
         self.bg_idx = num_classes  # no object (background)
 
     @torch.no_grad()
-    def forward(self, pred_scores:torch.Tensor, pred_boxes:torch.Tensor, anchor_points:torch.Tensor, gt_labels:torch.Tensor, gt_boxes:torch.Tensor):
+    def forward(
+        self,
+        pred_scores:torch.Tensor,
+        pred_boxes:torch.Tensor,
+        anchor_points:torch.Tensor,
+        gt_labels:torch.Tensor,
+        gt_boxes:torch.Tensor,
+        gt_mask:torch.Tensor
+    ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
         """
         Assignment works in 4 steps:
         1. Compute alignment metric between all predicted bboxes (at all scales) and GT
@@ -85,6 +95,7 @@ class TaskAlignedAssigner(nn.Module):
             anchor_points (Tensor): Anchor points of shape (num_anchors, 2)
             gt_labels (Tensor): GT labels of shape (batch_size, num_max_boxes, 1)
             gt_boxes (Tensor): GT boxes of shape (batch_size, num_max_boxes, 4)
+            gt_mask (Tensor): GT mask of shape (batch_size, num_max_boxes, 1)
 
         Returns:
             target_labels (Tensor): Target labels of shape (batch_size, num_anchors)
@@ -99,7 +110,9 @@ class TaskAlignedAssigner(nn.Module):
                     torch.zeros_like(pred_boxes).to(self.device),
                     torch.zeros_like(pred_scores).to(self.device))
         
-        mask, align_metrics, ious = self.get_positive_mask(pred_scores, pred_boxes, anchor_points, gt_labels, gt_boxes)
+        mask, align_metrics, ious = self.get_positive_mask(
+            pred_scores, pred_boxes, anchor_points, gt_labels, gt_boxes, gt_mask
+        )
 
         # Select GT box with highest IoU for each anchor
         target_gt_box_idxs, fg_mask, mask = select_highest_iou(mask, ious, num_max_boxes)
@@ -113,17 +126,17 @@ class TaskAlignedAssigner(nn.Module):
         align_metrics_norm = (align_metrics * positive_ious / (positive_align_metrics + self.eps)).amax(dim=-2).unsqueeze(-1)
         target_scores = target_scores * align_metrics_norm
 
-        return target_labels, target_boxes, target_scores, mask
+        return target_labels, target_boxes, target_scores, fg_mask.bool()
         
-    def get_positive_mask(self, pred_scores, pred_boxes, anchor_points, gt_labels, gt_boxes):
+    def get_positive_mask(self, pred_scores, pred_boxes, anchor_points, gt_labels, gt_boxes, gt_mask):
         mask_anchors_in_gt = anchors_in_gt_boxes(anchor_points, gt_boxes)
 
-        alignment_metrics, ious = self.get_alignment_metric(pred_scores, pred_boxes, gt_labels, gt_boxes, mask_anchors_in_gt)
+        alignment_metrics, ious = self.get_alignment_metric(pred_scores, pred_boxes, gt_labels, gt_boxes, mask_anchors_in_gt * gt_mask)
 
-        topk_mask = self.get_topk_candidates(alignment_metrics)
+        topk_mask = self.get_topk_candidates(alignment_metrics, mask=gt_mask.expand(-1, -1, self.topk))
 
         # merge masks (batch_size, num_max_boxes, n_anchors)
-        mask = topk_mask * mask_anchors_in_gt
+        mask = topk_mask * mask_anchors_in_gt * gt_mask
 
         return mask, alignment_metrics, ious
 
@@ -151,7 +164,7 @@ class TaskAlignedAssigner(nn.Module):
 
         return alignment_metrics, ious
     
-    def get_topk_candidates(self, alignment_metrics:torch.Tensor):
+    def get_topk_candidates(self, alignment_metrics:torch.Tensor, mask:torch.Tensor):
         """
         Select top-k candidates for each GT
         """
@@ -160,7 +173,8 @@ class TaskAlignedAssigner(nn.Module):
 
         # Take max of topk alignment metrics, only take those that are positive
         # make same dimension as topk_idxs
-        mask = (topk_metrics.amax(dim=-1, keepdim=True) > self.eps).expand_as(topk_idxs)
+        if mask is None:
+            mask = (topk_metrics.amax(dim=-1, keepdim=True) > self.eps).expand_as(topk_idxs)
         
         # Fill values that have negative alignment metric with 0 idx
         topk_idxs.masked_fill_(~mask, 0)

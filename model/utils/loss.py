@@ -5,6 +5,8 @@ from model.modules import make_anchors, dist2bbox, bbox2dist, xywh2xyxy
 from .metrics import bbox_iou, df_loss
 from .tal import TaskAlignedAssigner
 
+from typing import Dict, Tuple
+
 
 class BaseLoss:
     def __init__(self, device:str):
@@ -21,14 +23,25 @@ class BboxLoss(BaseLoss):
         self.reg_max = reg_max
         self.use_dfl = use_dfl
 
-    def compute_loss(self, pred_box_dist:torch.Tensor, pred_boxes:torch.Tensor, target_boxes:torch.Tensor, anchor_points:torch.Tensor, target_score:torch.Tensor):
-        weight = target_score.sum(dim=-1).unsqueeze(dim=-1)
-        iou = bbox_iou(pred_boxes, target_boxes, xywh=False)
-        iou_loss = ((1 - iou) * weight).sum() / max(target_score.sum(), 1)
+    def compute_loss(
+        self,
+        pred_box_dist:torch.Tensor,
+        pred_boxes:torch.Tensor,
+        target_boxes:torch.Tensor,
+        anchor_points:torch.Tensor,
+        target_scores:torch.Tensor,
+        mask:torch.Tensor
+    ) -> Tuple[torch.Tensor, torch.Tensor]:
+        weight = target_scores.sum(dim=-1)[mask].unsqueeze(dim=-1)
+        iou = bbox_iou(pred_boxes[mask], target_boxes[mask], xywh=False)
+
+        target_scores_sum = max(target_scores.sum(), 1)
+        iou_loss = ((1 - iou) * weight).sum() / target_scores_sum
 
         if self.use_dfl:
             gt_ltrb = bbox2dist(target_boxes, anchor_points, self.reg_max)
-            dfl_loss = df_loss(pred_box_dist.view(-1, self.reg_max+1), gt_ltrb*weight)
+            dfl_loss = df_loss(pred_box_dist[mask].view(-1, self.reg_max+1), gt_ltrb[mask]) * weight
+            dfl_loss = dfl_loss.sum() / target_scores_sum
         else:
             dfl_loss = torch.tensor(0.0).to(self.device)
 
@@ -93,10 +106,7 @@ class DetectionLoss(BaseLoss):
         pred_boxes = pred_box_dist.view(b, a, 4, c//4).softmax(dim=3) @ self.proj
         return dist2bbox(pred_boxes, anchor_points, xywh=False)
 
-    def compute_loss(self, batch:torch.Tensor, preds:torch.Tensor):
-        # (box loss, cls loss, dfl loss)
-        loss = torch.zeros(3, device=self.device)
-
+    def compute_loss(self, batch:Dict[str,torch.Tensor], preds:torch.Tensor):
         pred_box_dist, pred_cls = torch.cat(
             [xi.view(preds[0].shape[0], self.n_outputs, -1) for xi in preds], dim=2
         ).split((4*self.reg_max, self.nc), dim=1)
@@ -114,16 +124,18 @@ class DetectionLoss(BaseLoss):
         targets = self.preprocess(targets, batch_size, scale_tensor=im_size[[1,0,1,0]])
         # cls, xyxy box
         gt_cls, gt_boxes = targets.split((1,4), dim=2)
-        mask = gt_boxes.sum(dim=2, keepdim=True) > 0
+        gt_mask = gt_boxes.sum(dim=2, keepdim=True) > 0  # mask to filter out (0,0,0,0) boxes (just used to pad tensor)
 
         _, target_boxes, target_scores, mask = self.tal_assigner(
-            pred_cls.detach().sigmoid(), pred_boxes.detach() * stride_tensor, anchor_points * stride_tensor, gt_cls, gt_boxes
+            pred_cls.detach().sigmoid(), pred_boxes.detach() * stride_tensor, anchor_points * stride_tensor, gt_cls, gt_boxes, gt_mask
         )
         
         cls_loss = self.bce_loss(pred_cls, target_scores).sum() / max(target_scores.sum(), 1)
 
         if mask.sum() > 0:
-            iou_loss, dfl_loss = self.bbox_loss.compute_loss(pred_box_dist, pred_boxes, target_boxes, anchor_points, target_scores)
+            iou_loss, dfl_loss = self.bbox_loss.compute_loss(
+                pred_box_dist, pred_boxes, target_boxes/stride_tensor, anchor_points, target_scores, mask
+            )
         else:
             iou_loss = torch.tensor(0.0).to(self.device)
             dfl_loss = torch.tensor(0.0).to(self.device)

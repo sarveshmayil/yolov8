@@ -50,18 +50,71 @@ def unpad(x:torch.Tensor, pads:tuple):
     l, r, t, b = pads
     return x[..., t:-b, l:-r]
 
-def pad_xyxy(xyxy:Union[np.ndarray, torch.Tensor], pads:Tuple[int, int, int, int]):
+def pad_xyxy(xyxy:Union[np.ndarray, torch.Tensor], pads:Tuple[int, int, int, int], im_size:Tuple[int, int]=None, return_norm:bool=False):
     """
     Add padding to the bounding boxes based on image padding
 
     Args:
+        xyxy: The bounding boxes in the format of `(x_min, y_min, x_max, y_max)`.
+            if `im_size` is provided, assume this is normalized coordinates
         pad: The padding added to the image in the format
             of `(left, right, top, bottom)`.
+        im_size: The size of the original image in the format of `(height, width)`.
+        return_norm: Whether to return normalized coordinates
     """
     l, r, t, b = pads
+    if return_norm and im_size is None:
+        raise ValueError("im_size must be provided if return_norm is True")
+    
+    if im_size is not None:
+        h, w = im_size
+        hpad, wpad = h+b+t, w+l+r
+    
     if isinstance(xyxy, np.ndarray):
-        return xyxy + np.array([l, t, l, t], dtype=xyxy.dtype)
-    return xyxy + torch.tensor([l, t, l, t], dtype=xyxy.dtype, device=xyxy.device)
+        xyxy_unnorm = xyxy * np.array([w, h, w, h], dtype=xyxy.dtype) if im_size else xyxy
+        padded = xyxy_unnorm + np.array([l, t, l, t], dtype=xyxy.dtype)
+        if return_norm:
+            padded /= np.array([wpad, hpad, wpad, hpad], dtype=xyxy.dtype)
+        return padded
+    
+    xyxy_unnorm = xyxy * torch.tensor([w, h, w, h], dtype=xyxy.dtype, device=xyxy.device) if im_size else xyxy
+    padded = xyxy_unnorm + torch.tensor([l, t, l, t], dtype=xyxy.dtype, device=xyxy.device)
+    if return_norm:
+        padded /= torch.tensor([wpad, hpad, wpad, hpad], dtype=xyxy.dtype, device=xyxy.device)
+    return padded
+
+def pad_xywh(xywh:Union[np.ndarray, torch.Tensor], pads:Tuple[int, int, int, int], im_size:Tuple[int, int]=None, return_norm:bool=False):
+    """
+    Add padding to the bounding boxes based on image padding
+
+    Args:
+        xywh: The bounding boxes in the format of `(x, y, w, h)`.
+            if `im_size` is provided, assume this is normalized coordinates
+        pad: The padding added to the image in the format
+            of `(left, right, top, bottom)`.
+        im_size: The size of the original image in the format of `(height, width)`.
+        return_norm: Whether to return normalized coordinates
+    """
+    l, r, t, b = pads
+    if return_norm and im_size is None:
+        raise ValueError("im_size must be provided if return_norm is True")
+    
+    if im_size is not None:
+        h, w = im_size
+        hpad, wpad = h+b+t, w+l+r
+
+    if isinstance(xywh, np.ndarray):
+        xywh_unnorm = xywh * np.array([w, h, w, h], dtype=xywh.dtype) if im_size else xywh
+        padded = xywh_unnorm + np.array([l, t, 0, 0], dtype=xywh.dtype)
+        if return_norm:
+            padded /= np.array([wpad, hpad, wpad, hpad], dtype=xywh.dtype)
+        return padded
+    
+    xywh_unnorm = xywh * torch.tensor([w, h, w, h], dtype=xywh.dtype, device=xywh.device) if im_size else xywh
+    padded = xywh_unnorm + torch.tensor([l, t, 0, 0], dtype=xywh.dtype, device=xywh.device)
+    if return_norm:
+        padded /= torch.tensor([wpad, hpad, wpad, hpad], dtype=xywh.dtype, device=xywh.device)
+    return padded
 
 def unpad_xyxy(xyxy:Union[np.ndarray, torch.Tensor], pads:Tuple[int, int, int, int]):
     """

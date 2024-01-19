@@ -8,7 +8,7 @@ import numpy as np
 import torch
 from math import ceil
 
-from model.data.utils import pad_to, pad_xyxy
+from model.data.utils import pad_to, pad_xywh
 
 from typing import Tuple
 
@@ -46,6 +46,8 @@ class Dataset(torch.utils.data.Dataset):
             log.debug(f'No labels found in {os.path.join(self.dataset_path, self.config[self.mode+"_labels"])}')
 
         self.labels = self.get_labels()
+
+        self.seen_idxs = set()
 
     def get_image_paths(self):
         """
@@ -138,8 +140,11 @@ class Dataset(torch.utils.data.Dataset):
         Gets image and annotations at specified index
         """
         label = self.labels[idx]
+        if idx in self.seen_idxs:
+            return label
         label['images'], label['padding'], label['orig_shapes'], label['ids'] = self.load_image(idx)
-        label['bboxes'] = pad_xyxy(label['bboxes'], label['padding'])
+        label['bboxes'] = pad_xywh(label['bboxes'], label['padding'], label['orig_shapes'], return_norm=True)
+        self.seen_idxs.add(idx)
 
         return label
 
