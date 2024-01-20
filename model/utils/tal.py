@@ -49,7 +49,7 @@ def select_highest_iou(mask:torch.Tensor, ious:torch.Tensor, num_max_boxes:int):
 
         # mask for GT box with highest IoU
         max_iou_mask = torch.zeros_like(mask, dtype=torch.bool)
-        max_iou_mask.scatter_(dim=1, index=max_iou_idx.unsqueeze(1), src=True)
+        max_iou_mask.scatter_(dim=1, index=max_iou_idx.unsqueeze(1), value=1)
 
         mask = torch.where(multi_gt_mask, max_iou_mask, mask)
         fg_mask = mask.sum(dim=1)
