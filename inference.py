@@ -34,7 +34,7 @@ def get_args():
         help='path to dataset config file'
     )
     dataset_args.add_argument(
-        '--dataset_mode',
+        '--dataset-mode',
         type=str,
         default='val',
         help='dataset mode - (train/val/test)'

@@ -12,13 +12,13 @@ def get_args():
     parser.add_argument(
         '--model',
         type=str,
-        default='yolov8n.pt',
+        required=True,
         help='Path to YOLO weights'
     )
     parser.add_argument(
         '--config',
         type=str,
-        default='model/config/models/yolov8n.yaml',
+        required=True,
         help='Path to model config'
     )
     parser.add_argument(
