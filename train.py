@@ -13,7 +13,7 @@ from torch.utils.data import DataLoader
 def get_args():
     parser = argparse.ArgumentParser(description='YOLOv8 model training')
     parser.add_argument(
-        '--model_config',
+        '--model-config',
         type=str,
         default='model/config/models/yolov8n.yaml',
         help='path to model config file'
@@ -25,7 +25,7 @@ def get_args():
     )
 
     parser.add_argument(
-        '--train_config',
+        '--train-config',
         type=str,
         default='model/config/training/fine_tune.yaml',
         help='path to training config file'
@@ -39,7 +39,7 @@ def get_args():
         help='path to dataset config file'
     )
     dataset_args.add_argument(
-        '--dataset_mode',
+        '--dataset-mode',
         type=str,
         default='train',
         help='dataset mode'
@@ -73,7 +73,7 @@ def main(args):
 
     optimizer = torch.optim.Adam(model.parameters(), lr=train_config['lr'])
 
-    dataset = Dataset(args.dataset, mode=args.dataset_mode)
+    dataset = Dataset(args.dataset, mode=args.dataset_mode, batch_size=train_config['batch_size'])
     dataloader = DataLoader(dataset, batch_size=dataset.batch_size, shuffle=True, collate_fn=Dataset.collate_fn)
 
     if args.save:
