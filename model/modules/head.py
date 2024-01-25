@@ -71,7 +71,7 @@ class DetectionHead(nn.Module):
 
         # (batch, 4+nc, n_layers*height*width)
         out = torch.cat((bbox, torch.sigmoid(cls)), dim=1)
-        return out, x
+        return out
     
     def _bias_init(self) -> None:
         """

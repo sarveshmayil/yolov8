@@ -31,10 +31,7 @@ class BaseModel(nn.Module):
 
     def predict(self, x:torch.Tensor, *args, **kwargs):
         preds = self._predict(x, *args, **kwargs)
-
-        if self.mode == 'eval':
-            return self.postprocess(preds)
-        return preds
+        return self.postprocess(preds) if self.mode == 'eval' else preds
     
     def _predict(self, x:torch.Tensor, *args, **kwargs):
         outputs = []

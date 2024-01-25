@@ -16,14 +16,20 @@ def get_args():
     parser.add_argument(
         '--config',
         type=str,
-        default='model/config/models/yolov8n.yaml',
+        default=None,
         help='path to model config file'
     )
     parser.add_argument(
         '--weights',
         type=str,
-        default='model/weights/yolov8n.pt',
+        default=None,
         help='path to weights file'
+    )
+    parser.add_argument(
+        '--onnx',
+        type=str,
+        default=None,
+        help='path to ONNX file'
     )
 
     dataset_args = parser.add_argument_group('Dataset')
@@ -64,7 +70,6 @@ def get_args():
 
     return parser.parse_args()
 
-
 def main(args):
     device = torch.device(args.device)
     model = DetectionModel(args.config, device=device)
@@ -76,7 +81,6 @@ def main(args):
     dataloader = DataLoader(dataset, batch_size=dataset.batch_size, shuffle=True, collate_fn=Dataset.collate_fn)
 
     if args.visualize:
-        num_classes = len(dataset.config['names'])
         cmap = cm['jet']
 
     if args.save:
@@ -96,24 +100,46 @@ def main(args):
             if args.visualize:
                 image = batch['images'][i].detach().cpu().numpy().transpose((1, 2, 0))
                 image = cv2.cvtColor(image, cv2.COLOR_RGB2BGR)
+                detections.view(image, classes_dict=dataset.config['names'], cmap=cmap)
+                cv2.imshow('annotations', image)
+                cv2.waitKey(0)
 
-                for j in range(len(detections)):
-                    x1, y1, x2, y2 = detections.xyxy[j].astype(int)
-                    cls = detections.class_id[j]
-                    confidence = detections.confidence[j]
-                    label = dataset.config['names'][cls] + f' {confidence:.2f}'
+    cv2.destroyAllWindows()
 
-                    cls_color = cmap(cls/num_classes, bytes=True)[:3]
-                    cls_color = (int(cls_color[0]), int(cls_color[1]), int(cls_color[2]))
+def main_onnx(args):
+    import onnx, onnxruntime
+    from model.utils.ops import nms
 
-                    # draw bounding box
-                    cv2.rectangle(image, (x1, y1), (x2, y2), cls_color, 2)
+    model = onnx.load(args.onnx)
+    onnx.checker.check_model(model)
 
-                    # draw label
-                    (w, h), _ = cv2.getTextSize(label, cv2.FONT_HERSHEY_SIMPLEX, 0.6, 1)
-                    cv2.rectangle(image, (x1, y1), (x1+w, y1-h), cls_color, -1)
-                    cv2.putText(image, label, (x1, y1), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 0), 1, cv2.LINE_AA)
+    ort_session = onnxruntime.InferenceSession(args.onnx, providers=['CUDAExecutionProvider', 'CPUExecutionProvider'])
 
+    dataset = Dataset(args.dataset, mode=args.dataset_mode)
+    dataloader = DataLoader(dataset, batch_size=dataset.batch_size, shuffle=True, collate_fn=Dataset.collate_fn)
+
+    if args.visualize:
+        cmap = cm['jet']
+
+    if args.save:
+        save_path = os.path.join(os.path.dirname(args.dataset), dataset.config['path'], 'results', args.dataset_mode)
+        os.makedirs(save_path, exist_ok=True)
+
+    for batch in dataloader:
+        ort_inputs = {ort_session.get_inputs()[0].name: batch['images'].cpu().numpy()}
+        ort_outs = ort_session.run(None, ort_inputs)[0]
+        preds = nms(torch.from_numpy(ort_outs))
+
+        for i in range(len(preds)):
+            detections = Detections.from_yolo(preds[i])
+
+            if args.save:
+                detections.save(os.path.join(save_path, batch['ids'][i]+'.txt'), pads=batch['padding'][i], im_size=batch['orig_shapes'][i])
+
+            if args.visualize:
+                image = batch['images'][i].detach().cpu().numpy().transpose((1, 2, 0))
+                image = cv2.cvtColor(image, cv2.COLOR_RGB2BGR)
+                detections.view(image, classes_dict=dataset.config['names'], cmap=cmap)
                 cv2.imshow('annotations', image)
                 cv2.waitKey(0)
 
@@ -122,5 +148,8 @@ def main(args):
 
 if __name__ == '__main__':
     args = get_args()
-    main(args)
+    if args.onnx is not None:
+        main_onnx(args)
+    else:
+        main(args)
     

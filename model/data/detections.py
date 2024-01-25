@@ -3,9 +3,10 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Iterator, List, Optional, Tuple, Union
+from typing import Iterator, List, Optional, Tuple, Union, Dict
 
 import numpy as np
+import cv2
 
 from .utils import non_max_suppression, validate_detections_fields, xyxy2xywh
 from model.data.utils import unpad_xyxy
@@ -260,6 +261,34 @@ class Detections:
                 file.write(f'{cls} {x1:.6f} {y1:.6f} {x2:.6f} {y2:.6f} {confidence:.6f}\n')
 
         file.close()
+
+    def view(self, image:np.ndarray, classes_dict:Dict[int,str]=None, cmap=None, num_classes:int=None) -> np.ndarray:
+        for j in range(self.__len__()):
+            x1, y1, x2, y2 = self.xyxy[j].astype(int)
+            cls = self.class_id[j]
+            confidence = self.confidence[j]
+
+            if classes_dict is not None:
+                label = classes_dict[cls] + f' {confidence:.2f}'
+                num_classes = len(classes_dict)
+            else:
+                label = f'{cls} {confidence:.2f}'
+
+            if cmap and num_classes:
+                cls_color = cmap(cls/num_classes, bytes=True)[:3]
+                cls_color = (int(cls_color[0]), int(cls_color[1]), int(cls_color[2]))
+            else:
+                cls_color = (0, 255, 0)
+
+            # draw bounding box
+            cv2.rectangle(image, (x1, y1), (x2, y2), cls_color, 2)
+
+            # draw label
+            (w, h), _ = cv2.getTextSize(label, cv2.FONT_HERSHEY_SIMPLEX, 0.6, 1)
+            cv2.rectangle(image, (x1, y1), (x1+w, y1-h), cls_color, -1)
+            cv2.putText(image, label, (x1, y1), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 0), 1, cv2.LINE_AA)
+
+        return image
 
     @property
     def area(self) -> np.ndarray:

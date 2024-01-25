@@ -18,7 +18,6 @@ def nms(preds:torch.Tensor, confidence_thresh:float=0.25, iou_thresh:float=0.45)
         List[Tensor]: list of tensors of shape (num_boxes, 6) containing boxes with
             (x1, y1, x2, y2, confidence, class)
     """
-    preds = preds[0]
     b, nc, _ = preds.shape
     nc -= 4
 
