@@ -33,7 +33,23 @@ python3 train.py --weights model/weights/yolov8n.pt \
 
 To perform inference with a model, use the `inference.py` script. For example, to evaluate a model on a particular dataset:
 ```bash
-python3 inference.py --weights model/weights/yolov8n.pt \
+python3 inference.py --config model/config/models/yolov8n.yaml \
+                     --weights model/weights/yolov8n.pt \
+                     --dataset model/config/datasets/coco8.yaml \
+                     -v
+```
+
+#### ONNX
+ONNX models are also supported for inference. To convert a YOLOv8 model to the ONNX format, use the `export_model.py` script as follows:
+```bash
+python3 export_model.py --config model/config/models/yolov8n.yaml \
+                        --weights model/weights/yolov8n.pt \
+                        --output model/weights/yolov8n.onnx
+```
+
+To then use this ONNX model for inference, use the same `inference.py` script as above:
+```bash
+python3 inference.py --onnx model/weights/yolov8n.onnx \
                      --dataset model/config/datasets/coco8.yaml \
                      -v
 ```

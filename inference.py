@@ -150,6 +150,8 @@ if __name__ == '__main__':
     args = get_args()
     if args.onnx is not None:
         main_onnx(args)
-    else:
+    elif args.config is not None and args.weights is not None:
         main(args)
+    else:
+        raise ValueError('Invalid arguments, must provide either --onnx or both --config and --weights')
     
